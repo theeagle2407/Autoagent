@@ -129,7 +129,7 @@ Respond ONLY with a valid JSON object:
         const task = await contract.getTask(i);
         tasks.push(`#${i}: ${task.description} → ${ethers.formatEther(task.amount)} ETH — ${task.executed ? 'Executed' : 'Pending'}`);
       }
-      result = count === 0n ? '📋 No tasks yet.' : `📋 ${count} task(s):\n${tasks.join('\n')}`;
+      result = count === BigInt(0) ? '📋 No tasks yet.' : `📋 ${count} task(s):\n${tasks.join('\n')}`;
     }
 
     return NextResponse.json({
