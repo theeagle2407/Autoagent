@@ -1,0 +1,14 @@
+[
+  {
+    "id": "1774027785401",
+    "description": "Weekly ETH transfer",
+    "recipient": "0xC3d60A3dE236Fa03BF9fd16e1199fEFfCD0D5DAF",
+    "amount": "0.001",
+    "interval": "every week",
+    "intervalMs": 604800000,
+    "createdAt": "2026-03-20T17:29:45.401Z",
+    "nextRun": "2026-03-27T17:29:45.450Z",
+    "executionCount": 0,
+    "active": true
+  }
+]
