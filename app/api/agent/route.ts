@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { ethers } from 'ethers';
-import fs from 'fs';
-import path from 'path';
 import deploymentInfo from '../../../deployment.json';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -10,21 +8,6 @@ const provider = new ethers.JsonRpcProvider(process.env.STATUS_NETWORK_RPC || 'h
 const privateKey = process.env.AGENT_PRIVATE_KEY || '0x55f98d8672e08e5b6416961cf4aaad44d9a26fa05fa20335af146f3c8fadb79b';
 const wallet = new ethers.Wallet(privateKey, provider);
 const contract = new ethers.Contract(deploymentInfo.address, deploymentInfo.abi, wallet);
-
-const SCHEDULES_FILE = path.join(process.cwd(), 'schedules.json');
-
-function readSchedules() {
-  try {
-    if (!fs.existsSync(SCHEDULES_FILE)) return [];
-    return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf-8'));
-  } catch { return []; }
-}
-
-function writeSchedules(schedules: any[]) {
-  try {
-    fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2));
-  } catch { /* ignore on read-only fs */ }
-}
 
 function parseInterval(text: string): { label: string; ms: number } | null {
   const t = text.toLowerCase();
@@ -66,7 +49,7 @@ Actions: SEND, SCHEDULE, CHECK_BALANCE, LIST_TASKS, CREATE_TASK, EXECUTE_TASK, U
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       agentDecision = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
     } catch {
-      return NextResponse.json({ success: false, message: `❌ Could not understand that command. Please try again with a clearer instruction.` });
+      return NextResponse.json({ success: false, message: `❌ Could not understand that command. Please try again.` });
     }
 
     let txHash = null;
@@ -90,7 +73,7 @@ Actions: SEND, SCHEDULE, CHECK_BALANCE, LIST_TASKS, CREATE_TASK, EXECUTE_TASK, U
       if (!intervalInfo) {
         result = '❌ Could not understand the interval. Try: every minute, every hour, every day, every week, or every month.';
       } else {
-        const newSchedule = {
+        schedule = {
           id: Date.now().toString(),
           description: agentDecision.description || `Send ${agentDecision.amount} ETH to ${agentDecision.recipient}`,
           recipient: agentDecision.recipient,
@@ -102,11 +85,7 @@ Actions: SEND, SCHEDULE, CHECK_BALANCE, LIST_TASKS, CREATE_TASK, EXECUTE_TASK, U
           executionCount: 0,
           active: true,
         };
-        const schedules = readSchedules();
-        schedules.push(newSchedule);
-        writeSchedules(schedules);
-        schedule = newSchedule;
-        result = `⏰ Scheduled! I will automatically send ${agentDecision.amount} ETH to ${agentDecision.recipient} ${intervalInfo.label}. First execution: ${new Date(newSchedule.nextRun).toLocaleString()}. Gas cost: $0.00 every time.`;
+        result = `⏰ Scheduled! I will automatically send ${agentDecision.amount} ETH to ${agentDecision.recipient} ${intervalInfo.label}. First execution: ${new Date(schedule.nextRun).toLocaleString()}. Gas cost: $0.00 every time.`;
       }
 
     } else if (agentDecision.action === 'CREATE_TASK') {

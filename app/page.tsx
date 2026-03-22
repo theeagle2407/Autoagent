@@ -29,7 +29,7 @@ type Schedule = {
 
 const SUGGESTIONS = [
   { icon: '💰', label: 'Check my balance', cmd: 'Check my balance' },
-  { icon: '📤', label: 'Send ETH now', cmd: 'Send 0.001 ETH to 0xC3d60A3dE236Fa03BF9fd16e1199fEFfCD0D5DAF' },
+  { icon: '📤', label: 'Send ETH', cmd: 'Send 0.001 ETH to 0xC3d60A3dE236Fa03BF9fd16e1199fEFfCD0D5DAF' },
   { icon: '⏰', label: 'Schedule weekly payment', cmd: 'Send 0.001 ETH to 0xC3d60A3dE236Fa03BF9fd16e1199fEFfCD0D5DAF every week' },
   { icon: '🔁', label: 'Schedule daily payment', cmd: 'Send 0.001 ETH to 0xC3d60A3dE236Fa03BF9fd16e1199fEFfCD0D5DAF every day' },
 ];
@@ -55,6 +55,8 @@ function timeUntil(dateStr: string) {
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
+
+const SCHEDULES_KEY = 'autoagent_schedules';
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,26 +87,42 @@ export default function Home() {
     return () => clearInterval(stepInterval.current);
   }, [loading]);
 
-  const fetchSchedules = useCallback(async () => {
+  // Load schedules from localStorage
+  const loadSchedules = useCallback(() => {
     try {
-      const res = await fetch('/api/schedules');
-      const data = await res.json();
-      setSchedules(data);
-      const totalExec = data.reduce((acc: number, s: Schedule) => acc + s.executionCount, 0);
-      setTxCount(totalExec);
-      setGasSaved(parseFloat((totalExec * 0.0021).toFixed(4)));
+      const stored = localStorage.getItem(SCHEDULES_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setSchedules(parsed);
+        const totalExec = parsed.reduce((acc: number, s: Schedule) => acc + s.executionCount, 0);
+        setTxCount(totalExec);
+        setGasSaved(parseFloat((totalExec * 0.0021).toFixed(4)));
+      }
     } catch {}
   }, []);
 
   useEffect(() => {
-    fetchSchedules();
-    const interval = setInterval(fetchSchedules, 10000);
-    return () => clearInterval(interval);
-  }, [fetchSchedules]);
+    loadSchedules();
+  }, [loadSchedules]);
 
-  const deleteSchedule = async (id: string) => {
-    await fetch('/api/schedules', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    fetchSchedules();
+  const saveSchedule = (schedule: Schedule) => {
+    try {
+      const stored = localStorage.getItem(SCHEDULES_KEY);
+      const existing = stored ? JSON.parse(stored) : [];
+      existing.push(schedule);
+      localStorage.setItem(SCHEDULES_KEY, JSON.stringify(existing));
+      setSchedules(existing);
+    } catch {}
+  };
+
+  const deleteSchedule = (id: string) => {
+    try {
+      const stored = localStorage.getItem(SCHEDULES_KEY);
+      const existing = stored ? JSON.parse(stored) : [];
+      const updated = existing.filter((s: Schedule) => s.id !== id);
+      localStorage.setItem(SCHEDULES_KEY, JSON.stringify(updated));
+      setSchedules(updated);
+    } catch {}
   };
 
   const sendMessage = async (text?: string) => {
@@ -133,7 +151,7 @@ export default function Home() {
       }
 
       if (data.schedule) {
-        fetchSchedules();
+        saveSchedule(data.schedule);
         setTimeout(() => setActiveTab('schedules'), 2000);
       }
 
@@ -273,8 +291,8 @@ export default function Home() {
                 )}
                 {msg.schedule && (
                   <div style={{ marginTop: '8px', padding: '10px 14px', backgroundColor: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '10px', maxWidth: '85%' }}>
-                    <div style={{ fontSize: '11px', color: '#818cf8', fontWeight: '700', marginBottom: '4px' }}>⏰ SCHEDULE CREATED — FULLY AUTONOMOUS</div>
-                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>First run: {new Date(msg.schedule.nextRun).toLocaleString()}</div>
+                    <div style={{ fontSize: '11px', color: '#818cf8', fontWeight: '700', marginBottom: '4px' }}>⏰ SCHEDULE CREATED — AUTONOMOUS</div>
+                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Next run: {new Date(msg.schedule.nextRun).toLocaleString()}</div>
                     <button onClick={() => setActiveTab('schedules')} style={{ marginTop: '6px', fontSize: '11px', color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: '600' }}>View Schedules →</button>
                   </div>
                 )}
@@ -302,7 +320,7 @@ export default function Home() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                 <h2 style={{ fontSize: '15px', fontWeight: '800', margin: 0 }}>Active Schedules</h2>
-                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>{schedules.length} running · auto-executes on Vercel</span>
+                <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>{schedules.length} running</span>
               </div>
               {schedules.map(s => (
                 <div key={s.id} style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '18px' }}>
@@ -316,7 +334,7 @@ export default function Home() {
                       <button onClick={() => deleteSchedule(s.id)} style={{ padding: '4px 10px', backgroundColor: 'rgba(255,50,50,0.1)', border: '1px solid rgba(255,50,50,0.2)', borderRadius: '6px', fontSize: '10px', color: 'rgba(255,100,100,0.8)', fontWeight: '700', cursor: 'pointer' }}>DELETE</button>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                     {[
                       { label: 'Next Run', value: timeUntil(s.nextRun) },
                       { label: 'Executions', value: s.executionCount.toString() },
@@ -328,12 +346,6 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                  {s.lastTxHash && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: 'rgba(74,222,128,0.04)', border: '1px solid rgba(74,222,128,0.1)', borderRadius: '8px' }}>
-                      <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>Last tx: {new Date(s.lastRun!).toLocaleString()}</div>
-                      {React.createElement('a', { href: s.explorerUrl, target: '_blank', rel: 'noopener noreferrer', style: { fontSize: '10px', color: '#4ade80', fontWeight: '700', textDecoration: 'none' } }, `${s.lastTxHash.slice(0, 8)}...${s.lastTxHash.slice(-6)} ↗`)}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
