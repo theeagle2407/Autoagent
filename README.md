@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AutoAgent — AI Chief of Staff on Status Network
 
-## Getting Started
+> Tell your agent what to do. It handles the rest. On-chain. For free.
 
-First, run the development server:
+AutoAgent is an AI-powered agent that executes gasless on-chain transactions on Status Network autonomously. Speak in plain English — the agent interprets your command and executes it with zero gas fees.
+
+## Live Demo
+**https://autoagent-sn.vercel.app**
+
+## Smart Contract
+- **Address:** `0xEdD4628d4A38CA89a2Ae001694aE15225c4c8758`
+- **Network:** Status Network Sepolia (Chain ID: 1660990954)
+- **Explorer:** https://sepoliascan.status.network/address/0xEdD4628d4A38CA89a2Ae001694aE15225c4c8758
+
+## Gasless Transaction Proof
+Every transaction on AutoAgent uses gasPrice=0 and gasLimit set explicitly — leveraging Status Network's protocol-level gasless infrastructure.
+
+## Key Features
+- **Natural language commands** — "Send 0.001 ETH to 0x... every week"
+- **Autonomous scheduling** — Vercel Cron executes recurring transactions automatically
+- **Gasless transactions** — gasPrice=0 at protocol level on Status Network
+- **Smart contract task management** — create and execute on-chain tasks
+- **Live schedule dashboard** — track all running schedules with next execution time
+- **AI agent** — Groq LLaMA 3.3 70B interprets commands and decides actions
+
+## AI Agent Component
+The AI agent uses Groq's LLaMA 3.3 70B model to:
+- Interpret natural language commands
+- Decide the appropriate on-chain action (SEND, SCHEDULE, CREATE_TASK, etc.)
+- Execute transactions gaslessly on Status Network
+- Schedule recurring autonomous transactions via Vercel Cron
+
+## Architecture
+```
+User → Natural Language Command
+     → Groq LLaMA AI interprets command
+     → Agent builds transaction (gasPrice=0)
+     → Transaction executes on Status Network Sepolia
+     → TX hash returned with explorer link
+     → Scheduled tasks run autonomously via Vercel Cron
+```
+
+## Dependencies
+- Next.js 15
+- TypeScript
+- Tailwind CSS
+- ethers.js
+- groq-sdk
+- Hardhat (contract deployment)
+
+## Running Locally
+
+### Prerequisites
+- Node.js 18+
+- Groq API key (free at console.groq.com)
+- EVM wallet with Status Network Sepolia ETH
+
+### Setup
+```bash
+git clone https://github.com/theeagle2407/autoagent.git
+cd autoagent
+npm install
+```
+
+Create `.env.local`:
+```
+GROQ_API_KEY=your_groq_api_key
+AGENT_PRIVATE_KEY=your_wallet_private_key_with_0x
+STATUS_NETWORK_RPC=https://public.sepolia.rpc.status.network
+CRON_SECRET=your_cron_secret
+NEXT_PUBLIC_URL=http://localhost:3000
+```
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Deploy Contract
+```bash
+npx hardhat run scripts/deploy.js --network statusNetwork
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Status Network Details
+- **RPC:** https://public.sepolia.rpc.status.network
+- **Chain ID:** 1660990954
+- **Explorer:** https://sepoliascan.status.network
+- **Gas Price:** 0 (protocol level)
 
-## Learn More
+## Team
+**Aremu Elijah Oreoluwa** — Builder
+- GitHub: https://github.com/theeagle2407
+- Twitter: https://x.com/theeagle2407
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+MIT
