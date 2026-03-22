@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Groq from 'groq-sdk';
 import { ethers } from 'ethers';
+import fs from 'fs';
+import path from 'path';
 import deploymentInfo from '../../../deployment.json';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
@@ -8,6 +10,21 @@ const provider = new ethers.JsonRpcProvider(process.env.STATUS_NETWORK_RPC || 'h
 const privateKey = process.env.AGENT_PRIVATE_KEY || '0x55f98d8672e08e5b6416961cf4aaad44d9a26fa05fa20335af146f3c8fadb79b';
 const wallet = new ethers.Wallet(privateKey, provider);
 const contract = new ethers.Contract(deploymentInfo.address, deploymentInfo.abi, wallet);
+
+const SCHEDULES_FILE = path.join(process.cwd(), 'schedules.json');
+
+function readSchedules() {
+  try {
+    if (!fs.existsSync(SCHEDULES_FILE)) return [];
+    return JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf-8'));
+  } catch { return []; }
+}
+
+function writeSchedules(schedules: any[]) {
+  try {
+    fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(schedules, null, 2));
+  } catch { /* ignore on read-only fs */ }
+}
 
 function parseInterval(text: string): { label: string; ms: number } | null {
   const t = text.toLowerCase();
@@ -28,34 +45,28 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are AutoAgent. You MUST respond with ONLY a valid JSON object. No text before or after. No markdown. No explanation. Just raw JSON.
+          content: `You are AutoAgent. Respond ONLY with a valid JSON object. No text, no markdown, no explanation outside the JSON.
 
-Available actions: SEND, SCHEDULE, CHECK_BALANCE, LIST_TASKS, CREATE_TASK, EXECUTE_TASK, UNKNOWN
+{"action":"SEND","recipient":"0x...","amount":"0.001","description":"","interval":"","taskId":0,"message":"explanation"}
 
-Respond ONLY with this exact JSON format:
-{"action":"SEND","recipient":"0x...","amount":"0.001","description":"","interval":"","taskId":0,"message":"explanation here"}
-
-Rules:
-- For SEND: fill recipient and amount
-- For SCHEDULE: fill recipient, amount, and interval (every minute/hour/day/week/month)
+Actions: SEND, SCHEDULE, CHECK_BALANCE, LIST_TASKS, CREATE_TASK, EXECUTE_TASK, UNKNOWN
+- SEND: fill recipient and amount (ETH as string like "0.001")
+- SCHEDULE: fill recipient, amount, interval (every minute/hour/day/week/month)
 - For "every two days" use "every day"
-- For CHECK_BALANCE: just set action and message
-- For LIST_TASKS: just set action and message
-- amount must be a number string like "0.001" not "$10"
-- Always fill the message field with a human readable explanation`,
+- message field: always fill with human-readable explanation`,
         },
         { role: 'user', content: message },
       ],
     });
 
-    const responseText = completion.choices[0].message.content || '{}';
+    const responseText = (completion.choices[0].message.content || '{}').trim();
     let agentDecision: any;
 
     try {
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       agentDecision = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
     } catch {
-      return NextResponse.json({ success: false, message: `Agent could not parse command. Response was: ${responseText}` });
+      return NextResponse.json({ success: false, message: `❌ Could not understand that command. Please try again with a clearer instruction.` });
     }
 
     let txHash = null;
@@ -63,7 +74,7 @@ Rules:
     let schedule = null;
 
     if (agentDecision.action === 'SEND' && agentDecision.recipient && agentDecision.amount) {
-      const amountWei = ethers.parseEther(agentDecision.amount);
+      const amountWei = ethers.parseEther(String(agentDecision.amount));
       const tx = await wallet.sendTransaction({
         to: agentDecision.recipient,
         value: amountWei,
@@ -79,24 +90,27 @@ Rules:
       if (!intervalInfo) {
         result = '❌ Could not understand the interval. Try: every minute, every hour, every day, every week, or every month.';
       } else {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'}/api/schedules`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            description: agentDecision.description || `Send ${agentDecision.amount} ETH to ${agentDecision.recipient}`,
-            recipient: agentDecision.recipient,
-            amount: agentDecision.amount,
-            interval: intervalInfo.label,
-            intervalMs: intervalInfo.ms,
-          }),
-        });
-        const data = await res.json();
-        schedule = data.schedule;
-        result = `⏰ Scheduled! I will automatically send ${agentDecision.amount} ETH to ${agentDecision.recipient} ${intervalInfo.label}. First execution: ${new Date(schedule.nextRun).toLocaleString()}. Gas cost: $0.00 every time.`;
+        const newSchedule = {
+          id: Date.now().toString(),
+          description: agentDecision.description || `Send ${agentDecision.amount} ETH to ${agentDecision.recipient}`,
+          recipient: agentDecision.recipient,
+          amount: String(agentDecision.amount),
+          interval: intervalInfo.label,
+          intervalMs: intervalInfo.ms,
+          createdAt: new Date().toISOString(),
+          nextRun: new Date(Date.now() + intervalInfo.ms).toISOString(),
+          executionCount: 0,
+          active: true,
+        };
+        const schedules = readSchedules();
+        schedules.push(newSchedule);
+        writeSchedules(schedules);
+        schedule = newSchedule;
+        result = `⏰ Scheduled! I will automatically send ${agentDecision.amount} ETH to ${agentDecision.recipient} ${intervalInfo.label}. First execution: ${new Date(newSchedule.nextRun).toLocaleString()}. Gas cost: $0.00 every time.`;
       }
 
     } else if (agentDecision.action === 'CREATE_TASK') {
-      const amountWei = ethers.parseEther(agentDecision.amount || '0');
+      const amountWei = ethers.parseEther(String(agentDecision.amount || '0'));
       const tx = await contract.createTask(
         agentDecision.description || 'Agent task',
         agentDecision.recipient || wallet.address,
