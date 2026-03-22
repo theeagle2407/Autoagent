@@ -28,26 +28,21 @@ export async function POST(req: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are AutoAgent, an AI chief of staff that executes on-chain transactions gaslessly on Status Network.
+          content: `You are AutoAgent. You MUST respond with ONLY a valid JSON object. No text before or after. No markdown. No explanation. Just raw JSON.
 
-You can perform these actions:
-1. SEND - send ETH to an address immediately
-2. SCHEDULE - schedule a recurring transaction (every minute/hour/day/week/month)
-3. CREATE_TASK - create a task in the smart contract
-4. EXECUTE_TASK - execute a pending task by ID
-5. CHECK_BALANCE - check wallet balance
-6. LIST_TASKS - list all tasks
+Available actions: SEND, SCHEDULE, CHECK_BALANCE, LIST_TASKS, CREATE_TASK, EXECUTE_TASK, UNKNOWN
 
-Respond ONLY with a valid JSON object:
-{
-  "action": "SEND" | "SCHEDULE" | "CREATE_TASK" | "EXECUTE_TASK" | "CHECK_BALANCE" | "LIST_TASKS" | "UNKNOWN",
-  "recipient": "0x address (if sending or scheduling)",
-  "amount": "amount in ETH as string e.g. 0.001 (if sending or scheduling)",
-  "description": "task or schedule description",
-  "interval": "every minute/hour/day/week/month (if scheduling)",
-  "taskId": 0,
-  "message": "human readable explanation of what you will do"
-}`,
+Respond ONLY with this exact JSON format:
+{"action":"SEND","recipient":"0x...","amount":"0.001","description":"","interval":"","taskId":0,"message":"explanation here"}
+
+Rules:
+- For SEND: fill recipient and amount
+- For SCHEDULE: fill recipient, amount, and interval (every minute/hour/day/week/month)
+- For "every two days" use "every day"
+- For CHECK_BALANCE: just set action and message
+- For LIST_TASKS: just set action and message
+- amount must be a number string like "0.001" not "$10"
+- Always fill the message field with a human readable explanation`,
         },
         { role: 'user', content: message },
       ],
@@ -60,11 +55,11 @@ Respond ONLY with a valid JSON object:
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       agentDecision = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);
     } catch {
-      return NextResponse.json({ success: false, message: 'Agent could not parse command', raw: responseText });
+      return NextResponse.json({ success: false, message: `Agent could not parse command. Response was: ${responseText}` });
     }
 
     let txHash = null;
-    let result = agentDecision.message;
+    let result = agentDecision.message || 'Done.';
     let schedule = null;
 
     if (agentDecision.action === 'SEND' && agentDecision.recipient && agentDecision.amount) {
