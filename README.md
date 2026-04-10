@@ -92,6 +92,6 @@ npx hardhat run scripts/deploy.js --network statusNetwork
 **Aremu Elijah Oreoluwa** — Builder
 - GitHub: https://github.com/theeagle2407
 - Twitter: https://x.com/theeagle2407
-
+- Email: elijahoreoluwa45@gmail.com
 ## License
 MIT
